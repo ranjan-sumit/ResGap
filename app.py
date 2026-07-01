@@ -539,6 +539,8 @@ _DEFAULTS = {
     "corpus":         [],    # full corpus (Tier 1 + Tier 2 + Tier 3)
     "loaded_run_id":  None,  # which saved run is currently displayed
     "report_bundle":  None,
+    "current_run_name": "",
+    "current_run_id": None,
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
@@ -668,6 +670,8 @@ with st.sidebar:
                     st.session_state.ref_diagnostics = loaded["results"].get("ref_diagnostics", {})
                     st.session_state.corpus       = loaded["results"].get("corpus", loaded["results"].get("papers", []))
                     st.session_state.loaded_run_id = run["id"]
+                    st.session_state.current_run_id = run["id"]
+                    st.session_state.current_run_name = run["name"]
                     st.rerun()
 
             st.markdown(
@@ -872,6 +876,8 @@ if run_btn and uploaded_files:
         # Auto-save to database
         saved_id = save_run(name, results)
         st.session_state.loaded_run_id = None  # fresh run, not a loaded one
+        st.session_state.current_run_id = saved_id
+        st.session_state.current_run_name = name
 
         prog.progress(80)
         prog.empty(); stat.empty()
@@ -1045,7 +1051,7 @@ if st.session_state.results:
             st.markdown("")
 
             # Filter
-            fc1,fc2 = st.columns(2)
+            fc1,fc2,fc3 = st.columns([1, 1, 1])
             with fc1:
                 tier_filter = st.selectbox("Filter by tier",
                                            ["All","Tier 2 (with abstract)","Tier 3 (title only)"],
@@ -1053,6 +1059,10 @@ if st.session_state.results:
             with fc2:
                 search_q = st.text_input("Search references", placeholder="keyword…",
                                           key="ref_search")
+            with fc3:
+                ref_view = st.selectbox("View references as",
+                                        ["Grouped by source paper", "Cards", "Table"],
+                                        key="ref_view")
 
             filtered = ref_papers
             if "Tier 2" in tier_filter:
@@ -1068,7 +1078,7 @@ if st.session_state.results:
                         f'Showing {len(filtered)} of {len(ref_papers)} references</div>',
                         unsafe_allow_html=True)
 
-            for ref in filtered[:80]:
+            def _render_ref(ref, idx=None):
                 tier    = ref.get("tier",3)
                 t_class = "tier-2-card" if tier==2 else "tier-3-card"
                 year    = ref.get("year","")
@@ -1081,15 +1091,20 @@ if st.session_state.results:
                 citations = ref.get("citations", 0)
                 oa_url = ref.get("open_access_url")
                 url = ref.get("url") or (f"https://doi.org/{doi}" if doi else "")
+                venue = html.escape(str(ref.get("venue") or ""))
+                authors = html.escape(", ".join(ref.get("authors", [])[:4])) if isinstance(ref.get("authors"), list) else ""
+                prefix = f"#{idx} " if idx is not None else ""
 
                 st.markdown(
                     f'<div class="ref-card {t_class}">'
-                    f'<div class="ref-title">{_tier_badge(tier)} {title_text}</div>'
+                    f'<div class="ref-title">{_tier_badge(tier)} {prefix}{title_text}</div>'
                     f'<div class="ref-meta">{html.escape(str(year))} &nbsp;·&nbsp; {html.escape(str(doi)[:40]) if doi else "no DOI"}'
                     f' &nbsp;·&nbsp; source: {source or "parsed"}'
                     f' &nbsp;·&nbsp; citations: {html.escape(str(citations or 0))}'
                     f' &nbsp;·&nbsp; cited in: {html.escape(str(found_in))}</div>'
-                    + (f'<div style="font-size:0.78rem;color:#8b949e;margin-top:0.3rem;">{abstract}…</div>'
+                    + (f'<div style="font-size:0.76rem;color:#55708f;margin-top:0.2rem;">{authors}</div>' if authors else '')
+                    + (f'<div style="font-size:0.76rem;color:#55708f;margin-top:0.2rem;font-style:italic;">{venue}</div>' if venue else '')
+                    + (f'<div style="font-size:0.82rem;color:#344054;margin-top:0.5rem;line-height:1.55;">{abstract}…</div>'
                        if abstract else '')
                     + '</div>',
                     unsafe_allow_html=True,
@@ -1102,6 +1117,44 @@ if st.session_state.results:
                 if raw_reference:
                     with st.expander(f"Raw citation: {title_text[:80]}"):
                         st.code(raw_reference, language=None)
+
+            if ref_view == "Table":
+                import pandas as pd
+                rows = []
+                for i, r in enumerate(filtered, 1):
+                    rows.append({
+                        "#": i,
+                        "Title": r.get("title", "Unknown"),
+                        "About / Abstract": (r.get("abstract") or r.get("raw_reference") or "")[:300],
+                        "Year": r.get("year", ""),
+                        "Tier": r.get("tier", ""),
+                        "Source API": r.get("source", ""),
+                        "Citations": r.get("citations", 0),
+                        "Cited In": r.get("found_in_paper", ""),
+                        "DOI": r.get("doi", ""),
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, height=520)
+            elif ref_view == "Grouped by source paper":
+                grouped_refs = {}
+                for r in filtered:
+                    grouped_refs.setdefault(r.get("found_in_paper") or "Unknown source paper", []).append(r)
+                for source_paper, refs_for_paper in grouped_refs.items():
+                    with st.expander(f"{source_paper} · {len(refs_for_paper)} fetched references", expanded=False):
+                        tier2_count = sum(1 for r in refs_for_paper if r.get("tier") == 2)
+                        abstract_count = sum(1 for r in refs_for_paper if r.get("abstract"))
+                        st.markdown(
+                            f'<div class="stage-card"><div class="stage-title">Fetched From This Uploaded Paper</div>'
+                            f'<div class="stage-body">{len(refs_for_paper)} references · {tier2_count} enriched · '
+                            f'{abstract_count} with abstract/about text</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                        for i, ref in enumerate(refs_for_paper[:40], 1):
+                            _render_ref(ref, idx=i)
+                        if len(refs_for_paper) > 40:
+                            st.info(f"Showing first 40 of {len(refs_for_paper)} references for this source paper. Use search or table view to inspect the rest.")
+            else:
+                for i, ref in enumerate(filtered[:80], 1):
+                    _render_ref(ref, idx=i)
 
     # ── Tab 3: Knowledge Graph ─────────────────────────────────────────────────
     with tab3:
@@ -1290,6 +1343,17 @@ if st.session_state.results:
                 '<div style="font-size:0.78rem;color:#8b949e;padding-top:0.5rem;">'
                 f'Stages 7–12 · Uses Tier 1 + Tier 2 params · {n_council_runs}× council runs</div>',
                 unsafe_allow_html=True)
+        default_lab_name = (
+            st.session_state.current_run_name
+            or context.get("domain")
+            or f"Analysis — {datetime.now().strftime('%H:%M')}"
+        )
+        lab_run_name = st.text_input(
+            "Computational Lab run name",
+            value=f"{default_lab_name} · Computational Lab",
+            key="comp_run_name",
+            help="This name is used in run history after the lab output is saved.",
+        )
 
         if run_comp:
             comp_prog = st.progress(0)
@@ -1386,21 +1450,24 @@ if st.session_state.results:
                 # Save comp results to existing run
                 if st.session_state.results:
                     try:
-                        from utils.database import _run_id
-                        save_run(
-                            name if 'name' in dir() else "run",
+                        saved_comp_id = save_run(
+                            lab_run_name.strip() or f"{default_lab_name} · Computational Lab",
                             st.session_state.results,
                             st.session_state.comp_results,
                         )
+                        st.session_state.current_run_id = saved_comp_id
+                        st.session_state.current_run_name = lab_run_name.strip() or f"{default_lab_name} · Computational Lab"
+                        st.session_state.loaded_run_id = saved_comp_id
                     except Exception:
                         pass
 
                 comp_prog.empty(); comp_stat.empty()
                 st.success(
-                    f"✅ Done — {len(params)} params "
+                    f"✅ Computational Lab saved — {len(params)} params "
                     f"(T1:{len(t1_params)} T2:{len(t2_params)} derived:{len(derived)}), "
                     f"{len(models_auto)} simulations, "
-                    f"{len(discovery.get('hypotheses',[]))} hypotheses.")
+                    f"{len(discovery.get('hypotheses',[]))} hypotheses. "
+                    f"Run history will show the 🧬 marker.")
 
             except Exception as e:
                 comp_prog.empty(); comp_stat.empty()
