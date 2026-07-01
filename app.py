@@ -298,21 +298,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Enterprise UI overlay — neutral productivity style ───────────────────────
+# ── Enterprise UI overlay — Pfizer-inspired clinical productivity style ──────
 st.markdown("""
 <style>
   :root {
-    --bg: #f8fafc;
+    --bg: #f5f9ff;
     --surface: #ffffff;
-    --surface-muted: #f1f5f9;
-    --border: #d9e1ec;
-    --text: #111827;
-    --muted: #667085;
-    --accent: #2563eb;
-    --accent-soft: #eff6ff;
-    --success: #059669;
-    --warning: #d97706;
-    --danger: #dc2626;
+    --surface-muted: #edf6ff;
+    --border: #c9dff5;
+    --text: #0b1f3a;
+    --muted: #55708f;
+    --accent: #0066cc;
+    --accent-strong: #004b93;
+    --accent-soft: #e5f2ff;
+    --success: #087f5b;
+    --warning: #b7791f;
+    --danger: #c81e1e;
   }
   html, body, [class*="css"], .stApp {
     background: var(--bg) !important;
@@ -320,7 +321,7 @@ st.markdown("""
     font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif !important;
   }
   [data-testid="stSidebar"] {
-    background: var(--surface) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f0f7ff 100%) !important;
     border-right: 1px solid var(--border) !important;
   }
   [data-testid="stSidebar"] * { color: var(--text); }
@@ -334,9 +335,11 @@ st.markdown("""
     text-transform: uppercase !important;
   }
   .main-header {
-    color: var(--text) !important;
-    -webkit-text-fill-color: var(--text) !important;
-    background: none !important;
+    color: var(--accent-strong) !important;
+    -webkit-text-fill-color: var(--accent-strong) !important;
+    background: linear-gradient(90deg, var(--accent-strong), #0093d0) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
     font-family: Inter, "Segoe UI", sans-serif !important;
     font-size: 2rem !important;
     font-weight: 700 !important;
@@ -351,10 +354,10 @@ st.markdown("""
     background: var(--surface) !important;
     border: 1px solid var(--border) !important;
     border-radius: 6px !important;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04) !important;
+    box-shadow: 0 1px 3px rgba(0, 76, 147, 0.08) !important;
   }
   .stage-title, .wiki-label, .proposal-section, .stat-label, .gap-meta, .ref-meta {
-    color: var(--muted) !important;
+    color: var(--accent-strong) !important;
     font-family: Inter, "Segoe UI", sans-serif !important;
     letter-spacing: 0.04em !important;
   }
@@ -374,7 +377,7 @@ st.markdown("""
     padding: 0.48rem 0.9rem !important;
   }
   .stButton > button:hover, .stDownloadButton > button:hover {
-    background: #1d4ed8 !important;
+    background: var(--accent-strong) !important;
     transform: none !important;
     box-shadow: none !important;
   }
@@ -389,7 +392,7 @@ st.markdown("""
   }
   [data-testid="stFileUploader"] {
     background: var(--surface) !important;
-    border: 1px dashed #94a3b8 !important;
+    border: 1px dashed #5aa9e6 !important;
   }
   .stTabs [data-baseweb="tab-list"] {
     background: var(--surface) !important;
@@ -416,6 +419,12 @@ st.markdown("""
     border-radius: 999px !important;
     font-family: Inter, "Segoe UI", sans-serif !important;
   }
+  .tier-1 { background:#e5f2ff !important; color:#004b93 !important; border:1px solid #7ab8f5 !important; }
+  .tier-2 { background:#e7f8f1 !important; color:#087f5b !important; border:1px solid #83d7b1 !important; }
+  .tier-3 { background:#f2f5f8 !important; color:#55708f !important; border:1px solid #c9d6e2 !important; }
+  .badge-high, .badge-open { background:#e7f8f1 !important; color:#087f5b !important; border-color:#83d7b1 !important; }
+  .badge-medium, .badge-partial { background:#fff7e6 !important; color:#b7791f !important; border-color:#f0c36a !important; }
+  .badge-low, .badge-solved { background:#fff1f1 !important; color:#c81e1e !important; border-color:#f0a0a0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -950,7 +959,12 @@ if st.session_state.results:
         for i, paper_res in enumerate(res.get("papers",[])):
             page  = paper_res.get("wiki", {})
             title = page.get("title", paper_res.get("filename", f"Paper {i+1}"))
-            with st.expander(f"{_tier_badge(1)} {title}", expanded=False):
+            with st.expander(f"T1 Uploaded PDF · {title}", expanded=False):
+                st.markdown(
+                    f'{_tier_badge(1)} '
+                    f'<span style="font-weight:700;color:#004b93;">{html.escape(str(title))}</span>',
+                    unsafe_allow_html=True,
+                )
                 c1,c2 = st.columns(2)
                 with c1:
                     _section_label("Contributions")
