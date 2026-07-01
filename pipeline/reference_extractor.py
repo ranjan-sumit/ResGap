@@ -626,15 +626,39 @@ def extract_and_enrich_references(
 
 
 def summarise_reference_corpus(refs: list[dict]) -> dict:
-    """Summary stats for display in the UI."""
+    """
+    Summary stats for display in the UI.
+
+    Handles mixed year formats from different metadata sources:
+    - int: 2010
+    - str: "2010"
+    - partial date strings: "2010 Jan", "2010-05-01"
+    - None / invalid values
+    """
+    refs = refs or []
+
     tier2 = [r for r in refs if r.get("tier") == 2]
     tier3 = [r for r in refs if r.get("tier") == 3]
     with_abstract = [r for r in refs if r.get("abstract")]
-    years = [r["year"] for r in refs if r.get("year")]
+
+    years = []
+    for r in refs:
+        raw_year = r.get("year")
+        if raw_year is None:
+            continue
+
+        try:
+            year = int(str(raw_year).strip()[:4])
+        except (TypeError, ValueError):
+            continue
+
+        if 1800 <= year <= 2100:
+            years.append(year)
+
     return {
-        "total":         len(refs),
+        "total": len(refs),
         "tier2_abstract": len(tier2),
-        "tier3_title":   len(tier3),
+        "tier3_title": len(tier3),
         "with_abstract": len(with_abstract),
-        "year_range":    f"{min(years)}–{max(years)}" if years else "N/A",
+        "year_range": f"{min(years)}–{max(years)}" if years else "N/A",
     }
